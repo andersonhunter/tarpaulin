@@ -209,6 +209,22 @@ def get_users():
         return {"Error": ERR_403}, 403
     
 
+@app.route('/' + USERS + '/<int:user_id>', methods=['GET'])
+@cross_origin(headers=["Content-Type", "Authorization"])
+@requires_auth
+def get_user_by_id(user_id):
+    """
+    Gets user info for the user specified in the path param user_id.
+    Requires valid JWT as bearer token in auth header,
+    and requires either admin scope or that the user is the same as the requesting user.
+    Returns the id, role, and sub of that user if all requirements are valid.
+    Returns an error if any are invalid.
+    """
+    # Validate and do stuff
+    pass
+
+
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
 
