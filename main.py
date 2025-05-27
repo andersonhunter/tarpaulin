@@ -21,6 +21,8 @@ ERR_404 = "Not found"
 AUTH0_DOMAIN = '{theDomain}'
 API_AUDIENCE = 'theAudience'
 ALGORITHMS = ["RS256"]
+CLIENT_ID = 'clientID'
+CLIENT_SECRET = 'clientSecret'
 
 
 # Set up app and clients
@@ -35,7 +37,7 @@ class AuthError(Exception):
         self.error = error
         self.status_code = status_code
 
-@APP.errorhandler(AuthError)
+@app.errorhandler(AuthError)
 def handle_auth_error(ex):
     response = jsonify(ex.error)
     response.status_code = ex.status_code
@@ -144,6 +146,38 @@ def requires_scope(required_scope):
             if token_scope == required_scope:
                 return True
     return False
+
+
+@app.route('/')
+@cross_origin(headers=["Content-Type", "Authorization"])
+def index():
+    return jsonify(message="Please navigate to a valid endpoint to use this app")
+
+ 
+@app.route('/' + USERS + '/' + LOGIN, methods=['POST'])
+def user_login():
+    """
+    Logs the user in.
+    Requires a valid username and password in request body.
+    Returns a JWT if username and password are valid.
+    Returns an appropriate error if param missing or invalid user/pass.
+    """
+    # Extract username and password
+    content = request.get_json()
+    if 'username' not in content | 'password' not in content:
+        return {"Error": ERR_400}, 400
+    username, password = content['username'], content['password']
+    body = {
+        "grant_type": "password",
+        "username": username,
+        "password": password,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET
+    }
+    headers = {"content-type": "application/json"}
+    url = 'http://' + AUTH0_DOMAIN + '/oauth/token'
+    r = requests.post(url, json=body, headers=headers)
+    return r.text, 200, {'Content-Type': 'application/json'} 
 
 
 
