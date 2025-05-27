@@ -167,6 +167,7 @@ def user_login():
     if 'username' not in content | 'password' not in content:
         return {"Error": ERR_400}, 400
     username, password = content['username'], content['password']
+    # Prepare and send auth token request
     body = {
         "grant_type": "password",
         "username": username,
@@ -176,10 +177,37 @@ def user_login():
     }
     headers = {"content-type": "application/json"}
     url = 'http://' + AUTH0_DOMAIN + '/oauth/token'
+    # Extract JWT and verify
     r = requests.post(url, json=body, headers=headers)
+    if r.status_code == 401:
+        return {"Error": ERR_401}, 401
     return r.text, 200, {'Content-Type': 'application/json'} 
 
 
+@app.route('/' + USERS, methods=['GET'])
+@cross_origin(headers=["Content-Type", "Authorization"])
+@requires_auth
+def get_users():
+    """
+    Get all the ids, role, and auth0 token for all users.
+    Requires valid JWT as bearer token in Auth header, 
+    and requires user to have admin scope.
+    """
+    if requires_scope("admin"):
+        try:
+            query = client.query(
+                kind=USERS,
+                order=['id'],
+                projection=['id', 'role', 'sub']
+            )
+            results = query.fetch()
+        except:
+            return {"Error": "Unable to fetch users"}, 500
+        finally:
+            return results, 200
+    else:
+        return {"Error": ERR_403}, 403
+    
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
