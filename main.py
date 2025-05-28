@@ -1,41 +1,50 @@
-#Imports
-from flask import Flask, request, jsonify, _request_ctx_stack
-from flask_cors import cross_origin
-import jwt
+from flask import Flask, request, jsonify
 from google.cloud import datastore
-from authlib.integrations.flask_client import OAuth
+
+import requests
 import json
+
 from six.moves.urllib.request import urlopen
-from functools import wraps
-
-# Define constants and string literals
-USERS = "users"
-LOGIN = "login"
-AVATAR = "avatar"
-COURSE = "course"
-STUDENTS = "students"
-ERR_400 = "The request body is invalid"
-ERR_401 = "Unauthorized"
-ERR_403 = "You don\'t have permission on this resource"
-ERR_404 = "Not found"
-AUTH0_DOMAIN = '{theDomain}'
-API_AUDIENCE = 'theAudience'
-ALGORITHMS = ["RS256"]
-CLIENT_ID = 'clientID'
-CLIENT_SECRET = 'clientSecret'
-
+from jose import jwt
+from authlib.integrations.flask_client import OAuth
 
 # Set up app and clients
 app = Flask(__name__)
+app.secret_key = 'SECRET_KEY'
 client = datastore.Client()
+
+# Define constants and string templates
+USERS         = 'users'
+LOGIN         = 'login'
+CLIENT_ID     = ''
+CLIENT_SECRET = ''
+DOMAIN        = ''
+ALGORITHMS    = ['RS256']
+ERR_400       = {'Error': 'The request body is invalid'}, 400
+ERR_401       = {'Error': 'Unauthorized'}, 401
+ERR_403       = {'Error': 'You don\'t have permission on this resource'}, 403
+ERR_404       = {'Error': 'Not found'}, 404
+
+# Set up OAuth client and registration
 oauth = OAuth(app)
+auth0 = oauth.register(
+    'auth0',
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    api_base_url="https://" + DOMAIN,
+    access_token_url="https://" + DOMAIN + "/oauth/token",
+    authorize_url="https://" + DOMAIN + "/authorize",
+    client_kwargs={
+        'scope': "openid profile email"
+    }
+)
 
-
-#Error handler, adapted from: https://auth0.com/docs/quickstart/backend/python
+# Set up custom auth error handler class
 class AuthError(Exception):
     def __init__(self, error, status_code):
         self.error = error
         self.status_code = status_code
+
 
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
@@ -44,130 +53,92 @@ def handle_auth_error(ex):
     return response
 
 
-# Format error response and append status code
-# Adapted from: https://auth0.com/docs/quickstart/backend/python
-def get_token_auth_header():
+def verify_jwt(request):
     """
-    Obtains access token from Auth Header
+    Verify the JWT in the auth header.
+    Receives a request object.
+    Validates JWT and returns JWT if successful.
+    Returns an AuthError if validation is unsuccessful
     """
-    auth = request.headers.get("Authorization", None)
-    if not auth:
-        raise AuthError({
-            "code": "authorization_header_missing",
-            "description": "Authorization header is expected"
-        }, 401)
-
-    parts = auth.split()
-
-    if parts[0].lower() != "bearer":
-        raise AuthError({
-            "code": "invalid_header",
-            "description": "Authorization header must start with \"Bearer\""
-        }, 401)
-    elif len(parts) == 1:
-        raise AuthError({
-            "code": "invalid_header",
-            "description": "Token not found"
-        }, 401)
-    elif len(parts) > 2:
-        raise AuthError({
-            "code": "invalid_header",
-            "description": "Authorization header must be \"Bearer token\""
-        }, 401)
-    
-    token = parts[1]
-    return token
-
-
-def requires_auth(f):
-    """
-    Determines if the access token is valid.
-    Adapted from: https://auth0.com/docs/quickstart/backend/python
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = get_token_auth_header()
-        jsonurl = urlopen("https://" + AUTH0_DOMAIN + "/.well-known/jwks.json")
+    if 'Authorization' in request.headers:
+        auth_header = request.headers['Authorization'].split()
+        token = auth_header[1]
+    else:
+        return AuthError({"code": "no auth header",
+                         "description": "Authorization header is missing"}, 401)
+    jsonurl = urlopen("https://" + DOMAIN + "/.well-known/jwks.json")
+    jwks = json.loads(jsonurl.read())
+    try:
         unverified_header = jwt.get_unverified_header(token)
-        public_key = None
-        for key in jwks["keys"]:
-            if key["kid"] == unverified_header["kid"]:
-                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
-        if public_key:
-            try:
-                payload = jwt.decode(
-                    token,
-                    public_key,
-                    algorithms=ALGORITHMS,
-                    audience=API_AUDIENCE,
-                    issuer="https://" + AUTH0_DOMAIN + "/"
-                    )
-            except jwt.ExpiredSignatureError:
-                raise AuthError({
-                    "code": "token_expired",
-                    "description": "token is expired"
-                }, 401)
-            except jwt.InvalidAudienceError:
-                raise AuthError({
-                    "code": "invalid_audience",
-                    "description": "incorrect audience, please check audience"
-                }, 401)
-            except jwt.InvalidIssuerError:
-                raise AuthError({
-                    "code": "invalid_issuer",
-                    "description": "incorrect issuer, please check the issuer"
-                }, 401)
-            except Exception:
-                raise AuthError({
-                    "code": "invalid_header",
-                    "description": "Unable to parse auth token"
-                }, 401)
-            _request_ctx_stack.top_current_user = payload
-            return f(*args, **kwargs)
-        raise AuthError({
+    except jwt.JWTError:
+        return AuthError({
+            "code": "invalid_header", 
+            "description": "Invalid header. Use an RS256 signed JWT Access Token"
+            }, 401)
+    if unverified_header["alg"] == "HS256":
+        return AuthError({
             "code": "invalid_header",
-            "description": "Unable to find appropriate key"
+            "description": "Invalid header. Use an RS256 signed JWT Access Token"
         }, 401)
-    return decorated
-
-
-def requires_scope(required_scope):
-    """
-    Determines if the required scope is present in the access token
-    Args: 
-        required_scope(str): The scope required to access the resource
-    Adapted from: https://auth0.com/docs/quickstart/backend/python
-    """
-    token = get_token_auth_header()
-    unverified_claims = jwt.decode(token, options={"verify_signature": False})
-    if unverified_claims.get("scope"):
-        token_scopes = unverified_claims["scope"].split()
-        for token_scope in token_scopes:
-            if token_scope == required_scope:
-                return True
-    return False
+    rsa_key = {}
+    for key in jwks["keys"]:
+        if key["kid"] == unverified_header["kid"]:
+            rsa_key = {
+                "kty": key["kty"],
+                "kid": key["kid"],
+                "use": key["use"],
+                "n": key["n"],
+                "e": key["e"]
+            }
+    if rsa_key:
+        try:
+            payload = jwt.decode(
+                token,
+                rsa_key,
+                algorithms=ALGORITHMS,
+                audience=CLIENT_ID,
+                issuer="https://" + DOMAIN + "/"
+            )
+        except jwt.ExpiredSignatureError:
+            return AuthError({
+                "code": "token_expired",
+                "description": "token is expired"
+            }, 401)
+        except jwt.JWTClaimsError:
+            return AuthError({
+                "code": "invalid_claims",
+                "description": "incorrect claims, please check the audience and issuer"
+            }, 401)
+        except Exception as e:
+            return AuthError({
+                "code": "invalid_header",
+                "description": "Unable to parse authentication token, error: " + str(e)
+            }, 401)
+        return payload
+    else:
+        return AuthError({
+            "code": "no_rsa_key",
+            "description": "No RSA key in JWKS"
+        }, 401)
 
 
 @app.route('/')
-@cross_origin(headers=["Content-Type", "Authorization"])
 def index():
-    return jsonify(message="Please navigate to a valid endpoint to use this app")
+    return 'Please navigate to a valid resource to use this API'
 
- 
+
 @app.route('/' + USERS + '/' + LOGIN, methods=['POST'])
-def user_login():
+def login():
     """
-    Logs the user in.
-    Requires a valid username and password in request body.
-    Returns a JWT if username and password are valid.
-    Returns an appropriate error if param missing or invalid user/pass.
+    Receives a username and password in the request body.
+    If credentials are valid, generates a JWT.
+    Returns JWT if valid, or appropriate error if not.
     """
-    # Extract username and password
+    # Extract and validate request body
     content = request.get_json()
-    if 'username' not in content | 'password' not in content:
-        return {"Error": ERR_400}, 400
+    if 'username' not in content or 'password' not in content:
+        return ERR_400
     username, password = content['username'], content['password']
-    # Prepare and send auth token request
     body = {
         "grant_type": "password",
         "username": username,
@@ -176,55 +147,8 @@ def user_login():
         "client_secret": CLIENT_SECRET
     }
     headers = {"content-type": "application/json"}
-    url = 'http://' + AUTH0_DOMAIN + '/oauth/token'
-    # Extract JWT and verify
+    url = "https://" + DOMAIN + "/oauth/token"
     r = requests.post(url, json=body, headers=headers)
-    if r.status_code == 401:
-        return {"Error": ERR_401}, 401
-    return r.text, 200, {'Content-Type': 'application/json'} 
-
-
-@app.route('/' + USERS, methods=['GET'])
-@cross_origin(headers=["Content-Type", "Authorization"])
-@requires_auth
-def get_users():
-    """
-    Get all the ids, role, and auth0 token for all users.
-    Requires valid JWT as bearer token in Auth header, 
-    and requires user to have admin scope.
-    """
-    if requires_scope("admin"):
-        try:
-            query = client.query(
-                kind=USERS,
-                order=['id'],
-                projection=['id', 'role', 'sub']
-            )
-            results = query.fetch()
-        except:
-            return {"Error": "Unable to fetch users"}, 500
-        finally:
-            return results, 200
-    else:
-        return {"Error": ERR_403}, 403
-    
-
-@app.route('/' + USERS + '/<int:user_id>', methods=['GET'])
-@cross_origin(headers=["Content-Type", "Authorization"])
-@requires_auth
-def get_user_by_id(user_id):
-    """
-    Gets user info for the user specified in the path param user_id.
-    Requires valid JWT as bearer token in auth header,
-    and requires either admin scope or that the user is the same as the requesting user.
-    Returns the id, role, and sub of that user if all requirements are valid.
-    Returns an error if any are invalid.
-    """
-    # Validate and do stuff
-    pass
-
-
-
-if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=8080, debug=True)
-
+    if type(verify_jwt(r)) is AuthError:
+        return ERR_401
+    return r, 200
