@@ -181,3 +181,33 @@ def get_users():
     except:
         return {'Error': 'Unable to GET users'}, 500
     
+
+@app.route('/' + USERS + '/<int:user_id>', methods=['GET'])
+def get_user_by_id(user_id):
+    """
+    Gets a user from datastore by the id given in the path params.
+    Requires a valid JWT in the auth header.
+    Requires that user is either an admin, or that user is requesting their own data.
+    Returns the user's data if request is authorized.
+    Raises an appropriate error if not.
+    """
+    try:
+        # Verify JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Verify user is authorized
+        query = datastore.query(kind=USERS)
+        query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
+        results = list(query.fetch())
+        if results['role'] != 'admin' or results['sub'] != payload['sub']:
+            return ERR_403
+        # User is authorized, query for user
+        if results['sub'] == payload['sub']:
+            return results, 200
+        query = datastore.query(kind=USERS)
+        query.add_filter(datastore.query.PropertyFilter("id", "=", user_id))
+        results = list(query.fetch())
+        return results, 200
+    except:
+        return {'Error': f'Unable to fetch user {user_id}'}, 500
