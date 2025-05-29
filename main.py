@@ -152,3 +152,32 @@ def login():
     if type(verify_jwt(r)) is AuthError:
         return ERR_401
     return r, 200
+
+
+@app.route('/' + USERS, methods=['GET'])
+def get_users():
+    """
+    Gets all users from datastore.
+    Requires a valid JWT in the auth header.
+    Requesting user must have admin access.
+    If request is valid, returns an array of all users.
+    If request is invalid, returns an appropriate error.
+    """
+    try:
+        # Verify JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Verify user's access
+        query = client.query(kind=USERS)
+        query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+        results = list(query.fetch())
+        if results['role'] != 'admin':
+            return ERR_403
+        # User has valid access, query users
+        query = client.query(kind=USERS)
+        results = list(query.fetch())
+        return results, 200
+    except:
+        return {'Error': 'Unable to GET users'}, 500
+    
