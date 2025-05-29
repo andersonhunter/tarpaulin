@@ -16,6 +16,7 @@ client = datastore.Client()
 # Define constants and string templates
 USERS         = 'users'
 LOGIN         = 'login'
+COURSES       = 'courses'
 CLIENT_ID     = ''
 CLIENT_SECRET = ''
 DOMAIN        = ''
@@ -208,6 +209,10 @@ def get_user_by_id(user_id):
         query = datastore.query(kind=USERS)
         query.add_filter(datastore.query.PropertyFilter("id", "=", user_id))
         results = list(query.fetch())
+        # Process accordingly
+        if results['role'] == 'instructor' or results['roles'] == 'student':
+            course_query = client.query(kind=COURSES)
+            course_query.add_filter(datastore.query.PropertyFilter(""))
         return results, 200
     except:
         return {'Error': f'Unable to fetch user {user_id}'}, 500
