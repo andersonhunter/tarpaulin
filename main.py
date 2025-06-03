@@ -174,7 +174,7 @@ def get_users():
         # Verify user's access
         query = client.query(kind=USERS)
         query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
-        results = list(query.fetch())
+        results = query.fetch()
         if results["role"] != 'admin':
             return ERR_403
         # User has valid access, query users
@@ -200,17 +200,17 @@ def get_user_by_id(user_id):
         if type(payload) is AuthError:
             return ERR_401
         # Verify user is authorized
-        query = datastore.query(kind=USERS)
+        query = client.query(kind=USERS)
         query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
-        results = list(query.fetch())
+        results = query.fetch()
         if results['role'] != 'admin' or results['sub'] != payload['sub']:
             return ERR_403
         # User is authorized, query for user
         if results['sub'] == payload['sub']:
             return results, 200
-        query = datastore.query(kind=USERS)
+        query = client.query(kind=USERS)
         query.add_filter(datastore.query.PropertyFilter("id", "=", user_id))
-        results = list(query.fetch())
+        results = query.fetch()
         # Process accordingly
         if results['role'] == 'instructor' or results['roles'] == 'student':
             course_query = client.query(kind=COURSES)
