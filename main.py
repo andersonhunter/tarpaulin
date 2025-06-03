@@ -14,17 +14,18 @@ app.secret_key = 'SECRET_KEY'
 client = datastore.Client()
 
 # Define constants and string templates
-USERS         = 'users'
-LOGIN         = 'login'
-COURSES       = 'courses'
-CLIENT_ID     = ''
+PORT = 8080
+USERS = 'users'
+LOGIN = 'login'
+COURSES = 'courses'
+CLIENT_ID = ''
 CLIENT_SECRET = ''
-DOMAIN        = ''
-ALGORITHMS    = ['RS256']
-ERR_400       = {'Error': 'The request body is invalid'}, 400
-ERR_401       = {'Error': 'Unauthorized'}, 401
-ERR_403       = {'Error': 'You don\'t have permission on this resource'}, 403
-ERR_404       = {'Error': 'Not found'}, 404
+DOMAIN = ''
+ALGORITHMS = ['RS256']
+ERR_400 = {'Error': 'The request body is invalid'}, 400
+ERR_401 = {'Error': 'Unauthorized'}, 401
+ERR_403 = {'Error': 'You don\'t have permission on this resource'}, 403
+ERR_404 = {'Error': 'Not found'}, 404
 
 # Set up OAuth client and registration
 oauth = OAuth(app)
@@ -39,6 +40,7 @@ auth0 = oauth.register(
         'scope': "openid profile email"
     }
 )
+
 
 # Set up custom auth error handler class
 class AuthError(Exception):
@@ -173,7 +175,7 @@ def get_users():
         query = client.query(kind=USERS)
         query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
         results = list(query.fetch())
-        if results['role'] != 'admin':
+        if results["role"] != 'admin':
             return ERR_403
         # User has valid access, query users
         query = client.query(kind=USERS)
@@ -216,3 +218,7 @@ def get_user_by_id(user_id):
         return results, 200
     except:
         return {'Error': f'Unable to fetch user {user_id}'}, 500
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=PORT, debug=True)
