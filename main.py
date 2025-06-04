@@ -20,7 +20,7 @@ LOGIN = 'login'
 COURSES = 'courses'
 CLIENT_ID = 'dAfIo7IWppXjCCs6qi6FQuLiiGy5C0yP'
 CLIENT_SECRET = '4RT8rnDPEkwOthpW3e72qixxGeR4Q89h_BR4IzWRruGSQW6htcJjDb4C2U4FbTu-'
-DOMAIN = ''
+DOMAIN = 'dev-1eddc7qebeobiwsf.us.auth0.com'
 ALGORITHMS = ['RS256']
 ERR_400 = {'Error': 'The request body is invalid'}, 400
 ERR_401 = {'Error': 'Unauthorized'}, 401
@@ -38,7 +38,7 @@ auth0 = oauth.register(
     authorize_url="https://" + DOMAIN + "/authorize",
     client_kwargs={
         'scope': "openid profile email"
-    }
+    },
 )
 
 
@@ -139,6 +139,7 @@ def login():
     """
     # Extract and validate request body
     content = request.get_json()
+    print(f'content = {content}')
     if 'username' not in content or 'password' not in content:
         return ERR_400
     username, password = content['username'], content['password']
@@ -152,9 +153,9 @@ def login():
     headers = {"content-type": "application/json"}
     url = "https://" + DOMAIN + "/oauth/token"
     r = requests.post(url, json=body, headers=headers)
-    if type(verify_jwt(r)) is AuthError:
-        return ERR_401
-    return r, 200
+    token = r.json()['access_token']
+    rep = {"token": token}
+    return jsonify(rep), 200
 
 
 @app.route('/' + USERS, methods=['GET'])
@@ -213,8 +214,8 @@ def get_user_by_id(user_id):
         results = query.fetch()
         # Process accordingly
         if results['role'] == 'instructor' or results['roles'] == 'student':
-            course_query = client.query(kind=COURSES)
-            course_query.add_filter(datastore.query.PropertyFilter(""))
+            for course in results['courses']:
+                results['courses'][course] = f'https://{request.url_root}courses/{course}'
         return results, 200
     except:
         return {'Error': f'Unable to fetch user {user_id}'}, 500
