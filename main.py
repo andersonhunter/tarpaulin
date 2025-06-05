@@ -468,7 +468,13 @@ def get_course_by_id(course_id: int):
             if instructor is None:
                 return ERR_400
         # Update specified params
-        
+        for param in content:
+            course[param] = content['param']
+        client.put(course)
+        course['self'] = request.url_root + COURSES + '/' + course['id']
+        return course, 200
+    else:
+        return ERR_404
 
 
 if __name__ == '__main__':
