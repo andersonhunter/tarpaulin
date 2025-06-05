@@ -411,9 +411,32 @@ def get_all_courses(offset: int, limit: int):
     query.order = ["subject"]
     courses = list(query.fetch(offset=offset, limit=limit))
     for course in courses:
-        course['self'] = request.url_root + COURSES + '/' + course['id']
+        course['self'] = request.url_root + COURSES + '/' + str(course['id'])
     next = request.url_root + COURSES + f'?limit={limit}&offset={offset + limit}'
     return {"courses": courses, "next": next}, 200
+
+
+@app.route('/' + COURSES + '/<int:course_id>', methods=['GET'])
+def get_course_by_id(course_id: int):
+    """
+    Fetches a single course by ID.
+    Requires a valid courseID specified in URL params.
+    Returns the course if it exists, or an error if not.
+    """
+    query = client.query(kind=COURSES)
+    query.projection = [
+        "id",
+        "instructor_id",
+        "number",
+        "subject",
+        "term",
+        "title"
+    ]
+    course = query.fetch()
+    if course is None:
+        return ERR_404
+    course['self'] = request.url_root + COURSES + '/' + str(course['id'])
+    return course, 200
 
 
 if __name__ == '__main__':
