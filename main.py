@@ -1,5 +1,6 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from google.cloud import datastore
+from google.cloud import storage
 
 import requests
 import json
@@ -18,6 +19,7 @@ PORT = 8080
 USERS = 'users'
 LOGIN = 'login'
 COURSES = 'courses'
+AVATAR = 'avatar'
 CLIENT_ID = 'dAfIo7IWppXjCCs6qi6FQuLiiGy5C0yP'
 CLIENT_SECRET = '4RT8rnDPEkwOthpW3e72qixxGeR4Q89h_BR4IzWRruGSQW6htcJjDb4C2U4FbTu-'
 DOMAIN = 'dev-1eddc7qebeobiwsf.us.auth0.com'
@@ -26,6 +28,7 @@ ERR_400 = {'Error': 'The request body is invalid'}, 400
 ERR_401 = {'Error': 'Unauthorized'}, 401
 ERR_403 = {'Error': 'You don\'t have permission on this resource'}, 403
 ERR_404 = {'Error': 'Not found'}, 404
+PHOTO_BUCKET = ''
 
 # Set up OAuth client and registration
 oauth = OAuth(app)
@@ -185,7 +188,7 @@ def get_users():
     
 
 @app.route('/' + USERS + '/<int:user_id>', methods=['GET'])
-def get_user_by_id(user_id):
+def get_user_by_id(user_id: int):
     """
     Gets a user from datastore by the id given in the path params.
     Requires a valid JWT in the auth header.
@@ -219,16 +222,47 @@ def get_user_by_id(user_id):
         }
         if results['role'] == 'instructor' or results['roles'] == 'student':
             for course in results['courses']:
-                user['courses'].append(f'https://{request.url_root}courses/{course}')
+                user['courses'].append(f'{request.url_root}courses/{course}')
         user['id'] = results['id']
         user['role'] = results['role']
         user['sub'] = results['sub']
         if results['avatar'] is not None:
             id = str(results['id'])
-            user['avatar'] = f'https://{request.url_root}users/{id}/avatar'
+            user['avatar'] = f'{request.url_root}users/{id}/avatar'
         return results, 200
     except:
         return {'Error': f'Unable to fetch user {user_id}'}, 500
+
+
+@app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST'])
+def update_avatar(user_id: int):
+    """
+    Creates or Updates user's avatar.
+    Requires a POST request with the user's ID in the header.
+    Requires a POST request with the new avatar in the body.
+    Requires a valid JWT as a bearer token in the auth header that belongs to the user.
+    Returns a JSON object with the URL for the new avatar if successful.
+    Returns an appropriate error if not.
+    """
+    # Validate content
+    if 'file' not in request.files:
+        return ERR_400
+    # Validate JWT
+    payload = verify_jwt(request)
+    if type(payload) is AuthError:
+        return ERR_401
+    # POST new avatar
+    content = request.files['file']
+    storage_client = storage.Client()
+    bucket = storage_client.get_bucket(PHOTO_BUCKET)
+    content.filename = str(user_id)
+    blob = bucket.blob(content.filename)
+    content.seek(0)
+    blob.upload_from_file(content)
+    avatar_url = f'{request.url_root}/users/'
+    avatar_url += content.filename
+    avatar_url += "/avatar"
+    return {"avatar_url": avatar_url}, 200
 
 
 if __name__ == '__main__':
