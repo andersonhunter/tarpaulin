@@ -30,6 +30,7 @@ ERR_400 = {'Error': 'The request body is invalid'}, 400
 ERR_401 = {'Error': 'Unauthorized'}, 401
 ERR_403 = {'Error': 'You don\'t have permission on this resource'}, 403
 ERR_404 = {'Error': 'Not found'}, 404
+ERR_409 = {'Error': 'Enrollment data is invalid'}, 409
 PHOTO_BUCKET = ''
 
 # Set up OAuth client and registration
@@ -535,8 +536,32 @@ def update_course_enrollment(course_id: int):
     if results['role'] == 'instructor' and results['sub'] != payload['sub']:
         return ERR_403
     # Enroll students, if any
-    
+    content = request.get_json()
+    put_students = []
+    for student in content['add']:
+        if student in content['remove']:
+            return ERR_409
+        # Add course to student
+        db_student = client.get(client.key(USERS, student))
+        if db_student is None or db_student['role'] != 'student':
+            return ERR_409
+        if course_id not in db_student['courses']:
+            db_student['courses'].append(course_id)
+            put_students.append(db_student)
+            # Add student to course
+            course['students'].append(student)
     # Disenroll students, if any
+    for student in content['remove']:
+        # Remove course from student
+        db_student = client.get(client.key(USERS, student))
+        if db_student is None:
+            return ERR_409
+        if course_id in db_student['courses']:
+            db_student['courses'].remove(course_id)
+            put_students.append(db_student)
+            # Remove student from course
+            course['students'].remove(student)
+    return '', 200
 
 
 if __name__ == '__main__':
