@@ -390,5 +390,31 @@ def create_course():
     return content, 201
 
 
+@app.route('/' + COURSES, defaults={'offset': 0, 'limit': 3}, methods=['GET'])
+@app.route('/' + COURSES + '/offset=<int:offset>&limit=<int:limit>')
+def get_all_courses(offset: int, limit: int):
+    """
+    Lists all courses ordered by subject (non-deterministic within subject).
+    Receives optional params of offset and limit.
+    Paginates results based on offset and limit, with a default of 3 per query.
+    Returns the # of courses specified with limit, starting with the course specified by offset.
+    """
+    query = client.query(kind=COURSES)
+    query.projection = [
+        "id",
+        "instructor_id",
+        "number",
+        "subject",
+        "term",
+        "title"
+    ]
+    query.order = ["subject"]
+    courses = list(query.fetch(offset=offset, limit=limit))
+    for course in courses:
+        course['self'] = request.url_root + COURSES + '/' + course['id']
+    next = request.url_root + COURSES + f'?limit={limit}&offset={offset + limit}'
+    return {"courses": courses, "next": next}, 200
+
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=PORT, debug=True)
