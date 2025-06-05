@@ -189,7 +189,7 @@ def get_users():
         payload = verify_jwt(request)
         if type(payload) is AuthError:
             return ERR_401
-        # Verify user's access
+        # Check user authorization
         query = client.query(kind=USERS)
         query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
         results = query.fetch()
@@ -281,7 +281,7 @@ def user_avatar(user_id: int):
         payload = verify_jwt(request)
         if type(payload) is AuthError:
             return ERR_401
-        # Validate user
+        # Check user authorization
         if authenticate_user(user_id, payload['sub']) is False:
             return ERR_403
         # POST new avatar
@@ -353,7 +353,7 @@ def create_course():
     payload = verify_jwt(request)
     if type(payload) is AuthError:
         return ERR_401
-    # Authenticate user
+    # Check user authorization
     query = client.query(kind=USERS)
     query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
     results = query.fetch()
@@ -416,27 +416,59 @@ def get_all_courses(offset: int, limit: int):
     return {"courses": courses, "next": next}, 200
 
 
-@app.route('/' + COURSES + '/<int:course_id>', methods=['GET'])
+@app.route('/' + COURSES + '/<int:course_id>', methods=['GET', 'PATCH'])
 def get_course_by_id(course_id: int):
     """
-    Fetches a single course by ID.
-    Requires a valid courseID specified in URL params.
-    Returns the course if it exists, or an error if not.
+    If method == GET:
+        Fetches a single course by ID.
+        Requires a valid courseID specified in URL params.
+        Returns the course if it exists, or an error if not.
+    If method == PATCH:
+        Performs a partial update on the course specified in the URL params.
+        Note: Endpoint cannot modify student enrollment.
+        Requires a JWT as bearer token in Auth header.
+        Requires admin role from user corresponding to the JWT.
+        Returns the course with the updated values if successful.
+        Raises appropriate errors if not.
     """
-    query = client.query(kind=COURSES)
-    query.projection = [
-        "id",
-        "instructor_id",
-        "number",
-        "subject",
-        "term",
-        "title"
-    ]
-    course = query.fetch()
-    if course is None:
-        return ERR_404
-    course['self'] = request.url_root + COURSES + '/' + str(course['id'])
-    return course, 200
+    if request.method == 'GET':
+        query = client.query(kind=COURSES)
+        query.projection = [
+            "id",
+            "instructor_id",
+            "number",
+            "subject",
+            "term",
+            "title"
+        ]
+        course = query.fetch()
+        if course is None:
+            return ERR_404
+        course['self'] = request.url_root + COURSES + '/' + str(course['id'])
+        return course, 200
+    elif request.method == 'PATCH':
+        # Validate JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Check user authorization
+        user_query = client.query(kind=USERS)
+        user_query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload["sub"]))
+        results = user_query.fetch()
+        if results is None or results["role"] != "admin":
+            return ERR_403
+        # Check if course exists
+        course = client.get(key=client.key(COURSES, course_id))
+        if course is None:
+            return ERR_403
+        content = request.get_json()
+        # Verify instructor is valid, if specified
+        if 'instructor_id' in content:
+            instructor = client.get(key=client.key(USERS, content['instructor_id']))
+            if instructor is None:
+                return ERR_400
+        # Update specified params
+        
 
 
 if __name__ == '__main__':
