@@ -4,6 +4,7 @@ from google.cloud import storage
 
 import requests
 import json
+import io
 
 from six.moves.urllib.request import urlopen
 from jose import jwt
@@ -128,6 +129,21 @@ def verify_jwt(request):
         }, 401)
 
 
+def authenticate_user(user_id: int, sub: int) -> bool:
+    """
+    Authenticates user.
+    Receives a user id and a JWT sub.
+    Checks if requesting user is authorized for their request.
+    Returns True if so, and False otherwise.
+    """
+    user = client.get(key=client.key(USERS, user_id))
+    if not user:
+        return False
+    if user['sub'] != sub:
+        return False
+    return True
+
+
 @app.route('/')
 def index():
     return 'Please navigate to a valid resource to use this API'
@@ -234,7 +250,7 @@ def get_user_by_id(user_id: int):
         return {'Error': f'Unable to fetch user {user_id}'}, 500
 
 
-@app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET'])
+@app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET', 'DELETE'])
 def user_avatar(user_id: int):
     """
     If method == POST:
@@ -245,11 +261,17 @@ def user_avatar(user_id: int):
         Returns a JSON object with the URL for the new avatar if successful.
         Returns an appropriate error if not.
     If method == GET:
-        Returns the avatar for the specified user.
+        Gets the avatar for the specified user.
         Requires a GET request with the user's ID in the URL params.
         Requires a valid JWT as a bearer token in the auth header that belongs to the user.
         Returns the file in the body if successful.
         Raises an appropriate error otherwise.
+    If method == DELETE:
+        Delete's the user's avatar, if it exists.
+        Requires a DELETE request with the user's ID in the URL params.
+        Requires a valid JWT as a bearer token in the auth header belonging to the user.
+        Returns nothing with status code 204 if successful.
+        Raises appropriate error otherwise.
     """
     if request.method == 'POST':
         # Validate content
@@ -260,10 +282,7 @@ def user_avatar(user_id: int):
         if type(payload) is AuthError:
             return ERR_401
         # Validate user
-        user = client.get(key=client.key(USERS, user_id))
-        if not user:
-            return ERR_404
-        if user['sub'] != payload['sub']:
+        if authenticate_user(user_id, payload['sub']) is False:
             return ERR_403
         # POST new avatar
         content = request.files['file']
@@ -278,7 +297,44 @@ def user_avatar(user_id: int):
         avatar_url += "/avatar"
         return {"avatar_url": avatar_url}, 200
     elif request.method == 'GET':
-        pass
+        # Validate JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Authenticate user
+        if authenticate_user(user_id, payload['sub']) is False:
+            return ERR_403
+        # Get file
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(PHOTO_BUCKET)
+        blob = bucket.blob(user_id)
+        avatar = io.BytesIO()
+        blob.download_to_file(avatar)
+        avatar.seek(0)
+        if avatar is None:
+            return ERR_404
+        return send_file(avatar, mimetype='image/x-png', download_name=str(user_id)), 200
+    elif request.method == 'DELETE':
+        # Validate JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Authenticate user
+        if authenticate_user(user_id, payload['sub']) is False:
+            return ERR_403
+        # Delete the file
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(PHOTO_BUCKET)
+        blob = bucket.blob(user_id)
+        avatar = io.BytesIO()
+        blob.download_to_file(avatar)
+        avatar.seek(0)
+        if avatar is None:
+            return ERR_404
+        bucket = storage_client.get_bucket(PHOTO_BUCKET)
+        blob = bucket.blob(user_id)
+        blob.delete()
+        return '', 204
     else:
         return ERR_403
 
