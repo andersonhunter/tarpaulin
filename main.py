@@ -234,41 +234,53 @@ def get_user_by_id(user_id: int):
         return {'Error': f'Unable to fetch user {user_id}'}, 500
 
 
-@app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST'])
+@app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET'])
 def update_avatar(user_id: int):
     """
-    Creates or Updates user's avatar.
-    Requires a POST request with the user's ID in the header.
-    Requires a POST request with the new avatar in the body.
-    Requires a valid JWT as a bearer token in the auth header that belongs to the user.
-    Returns a JSON object with the URL for the new avatar if successful.
-    Returns an appropriate error if not.
+    If method == POST:
+        Creates or Updates user's avatar.
+        Requires a POST request with the user's ID in the URL params.
+        Requires a POST request with the new avatar in the body.
+        Requires a valid JWT as a bearer token in the auth header that belongs to the user.
+        Returns a JSON object with the URL for the new avatar if successful.
+        Returns an appropriate error if not.
+    If method == GET:
+        Returns the avatar for the specified user.
+        Requires a GET request with the user's ID in the URL params.
+        Requires a valid JWT as a bearer token in the auth header that belongs to the user.
+        Returns the file in the body if successful.
+        Raises an appropriate error otherwise.
     """
-    # Validate content
-    if 'file' not in request.files:
-        return ERR_400
-    # Validate JWT
-    payload = verify_jwt(request)
-    if type(payload) is AuthError:
-        return ERR_401
-    # Validate user
-    user = client.get(key=client.key(USERS, user_id))
-    if not user:
-        return ERR_404
-    if user['sub'] != payload['sub']:
+    if request.method == 'POST':
+        # Validate content
+        if 'file' not in request.files:
+            return ERR_400
+        # Validate JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Validate user
+        user = client.get(key=client.key(USERS, user_id))
+        if not user:
+            return ERR_404
+        if user['sub'] != payload['sub']:
+            return ERR_403
+        # POST new avatar
+        content = request.files['file']
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(PHOTO_BUCKET)
+        content.filename = str(user_id)
+        blob = bucket.blob(content.filename)
+        content.seek(0)
+        blob.upload_from_file(content)
+        avatar_url = f'{request.url_root}/users/'
+        avatar_url += content.filename
+        avatar_url += "/avatar"
+        return {"avatar_url": avatar_url}, 200
+    elif request.method == 'GET':
+        pass
+    else:
         return ERR_403
-    # POST new avatar
-    content = request.files['file']
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(PHOTO_BUCKET)
-    content.filename = str(user_id)
-    blob = bucket.blob(content.filename)
-    content.seek(0)
-    blob.upload_from_file(content)
-    avatar_url = f'{request.url_root}/users/'
-    avatar_url += content.filename
-    avatar_url += "/avatar"
-    return {"avatar_url": avatar_url}, 200
 
 
 if __name__ == '__main__':
