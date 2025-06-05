@@ -508,60 +508,79 @@ def get_course_by_id(course_id: int):
         return ERR_404
 
 
-@app.route('/' + COURSES + '/<int:course_id>' + '/' + STUDENTS, methods=['PATCH'])
+@app.route('/' + COURSES + '/<int:course_id>' + '/' + STUDENTS, methods=['PATCH', 'GET'])
 def update_course_enrollment(course_id: int):
     """
-    Update enrollment (enroll, disenroll) students from a course
-    Requires a valid JWT as bearer token in auth header.
-    Requires user to have admin access, or to be an instructor for the course.
-    Receives an array in the body containing students to enroll and an array containing students to disenroll.
-    Either array may be empty.
-    Updates student enrollment accordingly.
-    Returns nothing if successful, or raises an error appropriately.
+    If method == PATCH:
+        Update enrollment (enroll, disenroll) students from a course
+        Requires a valid JWT as bearer token in auth header.
+        Requires user to have admin access, or to be an instructor for the course.
+        Receives an array in the body containing students to enroll and an array containing students to disenroll.
+        Either array may be empty.
+        Updates student enrollment accordingly.
+        Returns nothing if successful, or raises an error appropriately.
+    If method == GET:
+        Retrieve all students enrolled in the course specified in the URL params.
+        Requires a valid JWT as bearer token in auth header.
+        Requires user to have admin access, or to be an instructor for the course.
+        Receives a course_id in the URL params.
+        Returns all students enrolled in the course, if any.
+        Raises appropriate errors.
     """
-    # Verify JWT
-    payload = verify_jwt(request)
-    if type(payload) is AuthError:
-        return ERR_401
-    # Verify user authorization
-    query = client.query(kind=USERS)
-    query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
-    results = query.fetch()
-    if results is None:
-        return ERR_403
-    elif results["role"] != 'admin' and results["role"] != 'instructor':
-        return ERR_403
-    # Check if instructor is authorized
-    course = client.get(client.key(COURSES, course_id))
-    if results['role'] == 'instructor' and results['sub'] != payload['sub']:
-        return ERR_403
-    # Enroll students, if any
-    content = request.get_json()
-    put_students = []
-    for student in content['add']:
-        if student in content['remove']:
-            return ERR_409
-        # Add course to student
-        db_student = client.get(client.key(USERS, student))
-        if db_student is None or db_student['role'] != 'student':
-            return ERR_409
-        if course_id not in db_student['courses']:
-            db_student['courses'].append(course_id)
-            put_students.append(db_student)
-            # Add student to course
-            course['students'].append(student)
-    # Disenroll students, if any
-    for student in content['remove']:
-        # Remove course from student
-        db_student = client.get(client.key(USERS, student))
-        if db_student is None:
-            return ERR_409
-        if course_id in db_student['courses']:
-            db_student['courses'].remove(course_id)
-            put_students.append(db_student)
-            # Remove student from course
-            course['students'].remove(student)
-    return '', 200
+    if request.method == 'PATCH' or request.method == 'GET':
+        # Verify JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Verify user authorization
+        query = client.query(kind=USERS)
+        query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+        results = query.fetch()
+        if results is None:
+            return ERR_403
+        elif results["role"] != 'admin' and results["role"] != 'instructor':
+            return ERR_403
+        # Check if instructor is authorized
+        course = client.get(client.key(COURSES, course_id))
+        if course is None:
+            return ERR_403
+        if results['role'] == 'instructor' and results['sub'] != payload['sub']:
+            return ERR_403
+    if request.method == 'PATCH':
+        # Enroll students, if any
+        content = request.get_json()
+        put_students = []
+        for student in content['add']:
+            if student in content['remove']:
+                return ERR_409
+            # Add course to student
+            db_student = client.get(client.key(USERS, student))
+            if db_student is None or db_student['role'] != 'student':
+                return ERR_409
+            if course_id not in db_student['courses']:
+                db_student['courses'].append(course_id)
+                put_students.append(db_student)
+                # Add student to course
+                course['students'].append(student)
+        # Disenroll students, if any
+        for student in content['remove']:
+            # Remove course from student
+            db_student = client.get(client.key(USERS, student))
+            if db_student is None:
+                return ERR_409
+            if course_id in db_student['courses']:
+                db_student['courses'].remove(course_id)
+                put_students.append(db_student)
+                # Remove student from course
+                course['students'].remove(student)
+        # Commit changes
+        client.put_multi(put_students)
+        client.put(course)
+        return '', 200
+    elif request.method == 'GET':
+        return course['students'], 200
+    else:
+        return ERR_404
 
 
 if __name__ == '__main__':
