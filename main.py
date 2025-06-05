@@ -307,9 +307,12 @@ def user_avatar(user_id: int):
         if authenticate_user(user_id, payload['sub']) is False:
             return ERR_403
         # Get file
+        user = client.get(client.key(USERS, user_id))
+        if 'avatar' not in user:
+            return ERR_404
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(PHOTO_BUCKET)
-        blob = bucket.blob(user_id)
+        blob = bucket.blob(user['avatar'])
         avatar = io.BytesIO()
         blob.download_to_file(avatar)
         avatar.seek(0)
@@ -325,6 +328,7 @@ def user_avatar(user_id: int):
         if authenticate_user(user_id, payload['sub']) is False:
             return ERR_403
         # Delete the file
+        user = client.get(client.key(USERS, user_id))
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(PHOTO_BUCKET)
         blob = bucket.blob(user_id)
@@ -336,6 +340,8 @@ def user_avatar(user_id: int):
         bucket = storage_client.get_bucket(PHOTO_BUCKET)
         blob = bucket.blob(user_id)
         blob.delete()
+        del (user['avatar'])
+        client.put(user)
         return '', 204
     else:
         return ERR_403
