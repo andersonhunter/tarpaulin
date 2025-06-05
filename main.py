@@ -339,5 +339,56 @@ def user_avatar(user_id: int):
         return ERR_403
 
 
+@app.route('/' + COURSES, methods=['POST'])
+def create_course():
+    """
+    Creates a new course in datastore.
+    Requires a valid JWT as the bearer token in the auth header.
+    Requires user to have admin access.
+    Requires a valid instructor ID in the request body.
+    Returns a JSON representing the new course if successful.
+    Raises appropriate errors otherwise.
+    """
+    # Validate JWT
+    payload = verify_jwt(request)
+    if type(payload) is AuthError:
+        return ERR_401
+    # Authenticate user
+    query = client.query(kind=USERS)
+    query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
+    results = query.fetch()
+    if results['role'] != 'admin' or results['sub'] != payload['sub']:
+        return ERR_403
+    # Verify request params
+    content = request.get_json()
+    if "subject" not in content:
+        return ERR_400
+    elif "number" not in content:
+        return ERR_400
+    elif "title" not in content:
+        return ERR_400
+    elif "term" not in content:
+        return ERR_400
+    elif "instructor_id" not in content:
+        return ERR_400
+    # Verify that instructor exists
+    instructor = client.get(key=client.key(USERS, int(content['instructor_id'])))
+    if instructor is None:
+        return ERR_400
+    # Create new course
+    new_course = datastore.Entity(key=client.key(USERS))
+    new_course.update({
+        "subject": content["subject"],
+        "number": content["number"],
+        "title": content["title"],
+        "term": content["term"],
+        "instructor_id": int(content["instructor_id"])
+    })
+    client.put(new_course)
+    content["id"] = new_course.key.id
+    content["self"] = request.url_root + COURSES + '/' + str(content["id"])
+    return content, 201
+
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=PORT, debug=True)
