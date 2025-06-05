@@ -139,7 +139,6 @@ def login():
     """
     # Extract and validate request body
     content = request.get_json()
-    print(f'content = {content}')
     if 'username' not in content or 'password' not in content:
         return ERR_400
     username, password = content['username'], content['password']
@@ -154,7 +153,6 @@ def login():
     url = "https://" + DOMAIN + "/oauth/token"
     r = requests.post(url, json=body, headers=headers)
     token = r.json()['id_token']
-    print(f'Token = {token}')
     return {"token": token}, 200
 
 
@@ -213,9 +211,21 @@ def get_user_by_id(user_id):
         query.add_filter(datastore.query.PropertyFilter("id", "=", user_id))
         results = query.fetch()
         # Process accordingly
+        user = {
+            'courses': [],
+            'role': '',
+            'id': '',
+            'sub': ''
+        }
         if results['role'] == 'instructor' or results['roles'] == 'student':
             for course in results['courses']:
-                results['courses'][course] = f'https://{request.url_root}courses/{course}'
+                user['courses'].append(f'https://{request.url_root}courses/{course}')
+        user['id'] = results['id']
+        user['role'] = results['role']
+        user['sub'] = results['sub']
+        if results['avatar'] is not None:
+            id = str(results['id'])
+            user['avatar'] = f'https://{request.url_root}users/{id}/avatar'
         return results, 200
     except:
         return {'Error': f'Unable to fetch user {user_id}'}, 500
