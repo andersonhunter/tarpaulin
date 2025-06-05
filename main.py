@@ -153,9 +153,9 @@ def login():
     headers = {"content-type": "application/json"}
     url = "https://" + DOMAIN + "/oauth/token"
     r = requests.post(url, json=body, headers=headers)
-    token = r.json()['access_token']
-    rep = {"token": token}
-    return jsonify(rep), 200
+    token = r.json()['id_token']
+    print(f'Token = {token}')
+    return {"token": token}, 200
 
 
 @app.route('/' + USERS, methods=['GET'])
@@ -222,4 +222,4 @@ def get_user_by_id(user_id):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=True)
+    app.run(host='127.0.0.1', port=PORT, debug=True)
