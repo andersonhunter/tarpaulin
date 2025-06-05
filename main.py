@@ -290,14 +290,14 @@ def user_avatar(user_id: int):
         content = request.files['file']
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(PHOTO_BUCKET)
-        content.filename = str(user_id)
         blob = bucket.blob(content.filename)
         content.seek(0)
         blob.upload_from_file(content)
-        avatar_url = f'{request.url_root}/users/'
-        avatar_url += content.filename
-        avatar_url += "/avatar"
-        return {"avatar_url": avatar_url}, 200
+        # Update user profile
+        user = client.get(client.key(USERS, user_id))
+        user['avatar'] = content.filename
+        client.put(user)
+        return {"avatar_url": f'{request.url_root}users/{user_id}/avatar'}, 200
     elif request.method == 'GET':
         # Validate JWT
         payload = verify_jwt(request)
