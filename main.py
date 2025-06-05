@@ -235,7 +235,7 @@ def get_user_by_id(user_id: int):
 
 
 @app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET'])
-def update_avatar(user_id: int):
+def user_avatar(user_id: int):
     """
     If method == POST:
         Creates or Updates user's avatar.
