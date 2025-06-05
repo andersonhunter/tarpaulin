@@ -251,6 +251,12 @@ def update_avatar(user_id: int):
     payload = verify_jwt(request)
     if type(payload) is AuthError:
         return ERR_401
+    # Validate user
+    user = client.get(key=client.key(USERS, user_id))
+    if not user:
+        return ERR_404
+    if user['sub'] != payload['sub']:
+        return ERR_403
     # POST new avatar
     content = request.files['file']
     storage_client = storage.Client()
