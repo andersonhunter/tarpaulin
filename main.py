@@ -499,6 +499,7 @@ def get_course_by_id(course_id: int):
             student_record = client.get(client.key(USERS, student))
             student_record['courses'].remove(course_id)
             client.put(student_record)
+        # Delete the course
         client.delete(client.key(COURSES), course_id)
         return '', 204
     else:
