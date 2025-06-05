@@ -416,7 +416,7 @@ def get_all_courses(offset: int, limit: int):
     return {"courses": courses, "next": next}, 200
 
 
-@app.route('/' + COURSES + '/<int:course_id>', methods=['GET', 'PATCH'])
+@app.route('/' + COURSES + '/<int:course_id>', methods=['GET', 'PATCH', 'DELETE'])
 def get_course_by_id(course_id: int):
     """
     If method == GET:
@@ -430,6 +430,12 @@ def get_course_by_id(course_id: int):
         Requires admin role from user corresponding to the JWT.
         Returns the course with the updated values if successful.
         Raises appropriate errors if not.
+    If method == DELETE:
+        Deletes the course specified in the URL params.
+        Removes the course from each student enrolled in it.
+        Disassociates the instructor from the course.
+        Requires a JWT as a bearer token in Auth header.
+        Requires admin role from user corresponding to JWT.
     """
     if request.method == 'GET':
         query = client.query(kind=COURSES)
@@ -473,6 +479,28 @@ def get_course_by_id(course_id: int):
         client.put(course)
         course['self'] = request.url_root + COURSES + '/' + course['id']
         return course, 200
+    elif request.method == 'DELETE':
+        # Validate JWT
+        payload = verify_jwt(request)
+        if type(payload) is AuthError:
+            return ERR_401
+        # Check user authorization
+        query = client.query(kind=USERS)
+        query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
+        results = query.fetch()
+        if results['role'] != 'admin':
+            return ERR_403
+        # Verify that course exists
+        course = client.get(client.key(COURSES, course_id))
+        if course is None:
+            return ERR_403
+        # Remove course from each enrolled student
+        for student in course['students']:
+            student_record = client.get(client.key(USERS, student))
+            student_record['courses'].remove(course_id)
+            client.put(student_record)
+        client.delete(client.key(COURSES), course_id)
+        return '', 204
     else:
         return ERR_404
 
