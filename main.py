@@ -21,6 +21,7 @@ USERS = 'users'
 LOGIN = 'login'
 COURSES = 'courses'
 AVATAR = 'avatar'
+STUDENTS = 'students'
 CLIENT_ID = 'dAfIo7IWppXjCCs6qi6FQuLiiGy5C0yP'
 CLIENT_SECRET = '4RT8rnDPEkwOthpW3e72qixxGeR4Q89h_BR4IzWRruGSQW6htcJjDb4C2U4FbTu-'
 DOMAIN = 'dev-1eddc7qebeobiwsf.us.auth0.com'
@@ -504,6 +505,38 @@ def get_course_by_id(course_id: int):
         return '', 204
     else:
         return ERR_404
+
+
+@app.route('/' + COURSES + '/<int:course_id>' + '/' + STUDENTS, methods=['PATCH'])
+def update_course_enrollment(course_id: int):
+    """
+    Update enrollment (enroll, disenroll) students from a course
+    Requires a valid JWT as bearer token in auth header.
+    Requires user to have admin access, or to be an instructor for the course.
+    Receives an array in the body containing students to enroll and an array containing students to disenroll.
+    Either array may be empty.
+    Updates student enrollment accordingly.
+    Returns nothing if successful, or raises an error appropriately.
+    """
+    # Verify JWT
+    payload = verify_jwt(request)
+    if type(payload) is AuthError:
+        return ERR_401
+    # Verify user authorization
+    query = client.query(kind=USERS)
+    query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+    results = query.fetch()
+    if results is None:
+        return ERR_403
+    elif results["role"] != 'admin' and results["role"] != 'instructor':
+        return ERR_403
+    # Check if instructor is authorized
+    course = client.get(client.key(COURSES, course_id))
+    if results['role'] == 'instructor' and results['sub'] != payload['sub']:
+        return ERR_403
+    # Enroll students, if any
+    
+    # Disenroll students, if any
 
 
 if __name__ == '__main__':
