@@ -358,10 +358,11 @@ def create_course():
         return ERR_401
     # Check user authorization
     query = client.query(kind=USERS)
-    query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
-    results = query.fetch()
-    if results['role'] != 'admin' or results['sub'] != payload['sub']:
-        return ERR_403
+    query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+    results = list(query.fetch())
+    for result in results:
+        if result['role'] != 'admin':
+            return ERR_403
     # Verify request params
     content = request.get_json()
     if "subject" not in content:
@@ -378,6 +379,8 @@ def create_course():
     instructor = client.get(key=client.key(USERS, int(content['instructor_id'])))
     if instructor is None:
         return ERR_400
+    elif instructor['role'] != 'instructor':
+        return ERR_400
     # Create new course
     new_course = datastore.Entity(key=client.key(COURSES))
     new_course.update({
@@ -385,12 +388,12 @@ def create_course():
         "number": content["number"],
         "title": content["title"],
         "term": content["term"],
-        "instructor": {"values": [int(content["instructor_id"])]},
-        "students": {"values": []}
+        "instructor": int(content["instructor_id"]),
+        "students": []
     })
     client.put(new_course)
     # Add course to instructor
-    instructor['courses']['values'].append(new_course.key.id)
+    instructor['courses'].append(new_course.key.id)
     client.put(instructor)
     content["id"] = new_course.key.id
     content["self"] = request.url_root + COURSES + '/' + str(content["id"])
