@@ -475,24 +475,25 @@ def get_course_by_id(course_id: int):
         # Check user authorization
         user_query = client.query(kind=USERS)
         user_query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload["sub"]))
-        results = user_query.fetch()
-        if results is None or results["role"] != "admin":
-            return ERR_403
+        results = list(user_query.fetch())
+        for result in results:
+            if result is None or result["role"] != "admin":
+                return ERR_403
         # Check if course exists
-        course = client.get(key=client.key(COURSES, course_id))
+        course = client.get(client.key(COURSES, course_id))
         if course is None:
             return ERR_403
         content = request.get_json()
         # Verify instructor is valid, if specified
         if 'instructor_id' in content:
-            instructor = client.get(key=client.key(USERS, content['instructor_id']))
+            instructor = client.get(client.key(USERS, content['instructor_id']))
             if instructor is None:
                 return ERR_400
         # Update specified params
         for param in content:
             course[param] = content['param']
         client.put(course)
-        course['self'] = request.url_root + COURSES + '/' + course['id']
+        course['self'] = request.url_root + COURSES + '/' + str(course.key.id)
         return course, 200
     elif request.method == 'DELETE':
         # Validate JWT
@@ -501,21 +502,23 @@ def get_course_by_id(course_id: int):
             return ERR_401
         # Check user authorization
         query = client.query(kind=USERS)
-        query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
-        results = query.fetch()
-        if results['role'] != 'admin':
-            return ERR_403
+        query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+        results = list(query.fetch())
+        for result in results:
+            if result['role'] != 'admin':
+                return ERR_403
         # Verify that course exists
         course = client.get(client.key(COURSES, course_id))
         if course is None:
             return ERR_403
         # Remove course from each enrolled student
-        for student in course['students']['values']:
+        for student in course['students']:
             student_record = client.get(client.key(USERS, student))
-            student_record['courses']['values'].remove(course_id)
-            client.put(student_record)
+            if student_record is not None and course_id in student_record['courses']:
+                student_record['courses'].remove(course_id)
+                client.put(student_record)
         # Delete the course
-        client.delete(client.key(COURSES), course_id)
+        client.delete(client.key(COURSES, course_id))
         return '', 204
     else:
         return ERR_404
