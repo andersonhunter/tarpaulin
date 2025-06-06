@@ -235,15 +235,12 @@ def get_user_by_id(user_id: int):
     result = client.get(client.key(USERS, user_id))
     # Process accordingly
     user = {
-        'role': '',
-        'id': '',
-        'sub': ''
+        'role': user['role'],
+        'id': user.key.id,
+        'sub': user['sub']
     }
     if result['role'] == 'instructor' or result['role'] == 'student':
         user['courses'] = [course for course in result['courses']]
-    user['id'] = result.key.id
-    user['role'] = result['role']
-    user['sub'] = result['sub']
     if 'avatar' in result:
         user['avatar_url'] = f'{request.url_root}users/{str(result.key.id)}/avatar'
     return user, 200
