@@ -328,14 +328,12 @@ def user_avatar(user_id: int):
         user = client.get(client.key(USERS, user_id))
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(PHOTO_BUCKET)
-        blob = bucket.blob(user_id)
-        avatar = io.BytesIO()
-        blob.download_to_file(avatar)
-        avatar.seek(0)
-        if avatar is None:
+        user = client.get(client.key(USERS, user_id))
+        if user is None:
             return ERR_404
-        bucket = storage_client.get_bucket(PHOTO_BUCKET)
-        blob = bucket.blob(user_id)
+        if 'avatar' not in user:
+            return ERR_404
+        blob = bucket.blob(user['avatar'])
         blob.delete()
         del (user['avatar'])
         client.put(user)
