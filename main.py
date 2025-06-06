@@ -517,6 +517,12 @@ def get_course_by_id(course_id: int):
             if student_record is not None and course_id in student_record['courses']:
                 student_record['courses'].remove(course_id)
                 client.put(student_record)
+        # Remove course from the instructor
+        instructor = client.get(client.key(USERS, course['instructor']))
+        if instructor is None:
+            return ERR_403
+        if course_id in instructor['courses']:
+            instructor['courses'].remove(course_id)
         # Delete the course
         client.delete(client.key(COURSES, course_id))
         return '', 204
