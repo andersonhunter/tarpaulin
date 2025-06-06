@@ -238,14 +238,14 @@ def get_user_by_id(user_id: int):
         results = query.fetch()
         # Process accordingly
         user = {
-            'courses': {"values": []},
+            'courses': [],
             'role': '',
             'id': '',
             'sub': ''
         }
         if results['role'] == 'instructor' or results['roles'] == 'student':
-            for course in results['courses']:
-                user['courses']["values"].append(f'{request.url_root}courses/{course}')
+            for course in results['courses']['values']:
+                user['courses'].append(f'{request.url_root}courses/{course}')
         user['id'] = results['id']
         user['role'] = results['role']
         user['sub'] = results['sub']
@@ -398,6 +398,9 @@ def create_course():
         "instructor_id": int(content["instructor_id"])
     })
     client.put(new_course)
+    # Add course to instructor
+    instructor['courses']['values'].append(new_course.key.id)
+    client.put(instructor)
     content["id"] = new_course.key.id
     content["self"] = request.url_root + COURSES + '/' + str(content["id"])
     return content, 201
