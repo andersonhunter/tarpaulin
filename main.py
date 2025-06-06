@@ -457,20 +457,19 @@ def get_course_by_id(course_id: int):
         Requires admin role from user corresponding to JWT.
     """
     if request.method == 'GET':
-        query = client.query(kind=COURSES)
-        query.projection = [
-            "id",
-            "instructor_id",
-            "number",
-            "subject",
-            "term",
-            "title"
-        ]
-        course = query.fetch()
+        course = client.get(client.key(COURSES, course_id))
         if course is None:
             return ERR_404
-        course['self'] = request.url_root + COURSES + '/' + str(course['id'])
-        return course, 200
+        rep = {
+            "id": course.key.id,
+            "instructor_id": course["instructor"],
+            "self": request.url_root + COURSES + '/' + str(course.key.id),
+            "subject": course["subject"],
+            "term": course["term"],
+            "title": course["title"],
+            "number": course["number"]
+        }
+        return rep, 200
     elif request.method == 'PATCH':
         # Validate JWT
         payload = verify_jwt(request)
