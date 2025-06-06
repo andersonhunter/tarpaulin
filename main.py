@@ -199,6 +199,11 @@ def get_users():
             return ERR_403
         # User has valid access, query users
         query = client.query(kind=USERS)
+        query.projection = [
+            'id',
+            'sub',
+            'role'
+        ]
         results = list(query.fetch())
         return results, 200
     except:
