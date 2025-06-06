@@ -505,7 +505,7 @@ def get_course_by_id(course_id: int):
         # Remove course from each enrolled student
         for student in course['students']:
             student_record = client.get(client.key(USERS, student))
-            student_record['courses'].remove(course_id)
+            student_record['courses']['values'].remove(course_id)
             client.put(student_record)
         # Delete the course
         client.delete(client.key(COURSES), course_id)
@@ -563,28 +563,28 @@ def update_course_enrollment(course_id: int):
             db_student = client.get(client.key(USERS, student))
             if db_student is None or db_student['role'] != 'student':
                 return ERR_409
-            if course_id not in db_student['courses']:
-                db_student['courses'].append(course_id)
+            if course_id not in db_student['courses']['values']:
+                db_student['courses']['values'].append(course_id)
                 put_students.append(db_student)
                 # Add student to course
-                course['students'].append(student)
+                course['students']['values'].append(student)
         # Disenroll students, if any
         for student in content['remove']:
             # Remove course from student
             db_student = client.get(client.key(USERS, student))
             if db_student is None:
                 return ERR_409
-            if course_id in db_student['courses']:
-                db_student['courses'].remove(course_id)
+            if course_id in db_student['courses']['values']:
+                db_student['courses']['values'].remove(course_id)
                 put_students.append(db_student)
                 # Remove student from course
-                course['students'].remove(student)
+                course['students']['values'].remove(student)
         # Commit changes
         client.put_multi(put_students)
         client.put(course)
         return '', 200
     elif request.method == 'GET':
-        return course['students'], 200
+        return course['students']['values'], 200
     else:
         return ERR_404
 
