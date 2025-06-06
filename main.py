@@ -31,7 +31,7 @@ ERR_401 = {'Error': 'Unauthorized'}, 401
 ERR_403 = {'Error': 'You don\'t have permission on this resource'}, 403
 ERR_404 = {'Error': 'Not found'}, 404
 ERR_409 = {'Error': 'Enrollment data is invalid'}, 409
-PHOTO_BUCKET = ''
+PHOTO_BUCKET = 'tarpaulin_andershu_avatars'
 
 # Set up OAuth client and registration
 oauth = OAuth(app)
@@ -245,11 +245,11 @@ def get_user_by_id(user_id: int):
     user['role'] = result['role']
     user['sub'] = result['sub']
     if 'avatar' in result:
-        user['avatar'] = f'{request.url_root}users/{str(result.key.id)}/avatar'
+        user['avatar_url'] = f'{request.url_root}users/{str(result.key.id)}/avatar'
     return user, 200
 
 
-@app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET', 'DELETE'])
+@app.route('/' + USERS + '/<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET', 'DELETE'])
 def user_avatar(user_id: int):
     """
     If method == POST:
