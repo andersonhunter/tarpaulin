@@ -401,29 +401,38 @@ def create_course():
 
 
 @app.route('/' + COURSES, defaults={'offset': 0, 'limit': 3}, methods=['GET'])
-@app.route('/' + COURSES + '/offset=<int:offset>&limit=<int:limit>')
-def get_all_courses(offset: int, limit: int):
+@app.route('/' + COURSES + '?offset=<int:offset>&limit=<int:limit>', methods=['GET'])
+def get_all_courses(offset, limit):
     """
     Lists all courses ordered by subject (non-deterministic within subject).
     Receives optional params of offset and limit.
     Paginates results based on offset and limit, with a default of 3 per query.
     Returns the # of courses specified with limit, starting with the course specified by offset.
     """
+    if request.args.get("offset") is not None:
+        offset = int(request.args.get("offset"))
+    if request.args.get("limit") is not None:
+        limit = int(request.args.get("limit"))
+    print(f'offset = {offset}, limit = {limit}')
     query = client.query(kind=COURSES)
-    query.projection = [
-        "id",
-        "instructor_id",
-        "number",
-        "subject",
-        "term",
-        "title"
-    ]
     query.order = ["subject"]
     courses = list(query.fetch(offset=offset, limit=limit))
+    response = {
+        "courses": [],
+        "next": ''
+    }
     for course in courses:
-        course['self'] = request.url_root + COURSES + '/' + str(course['id'])
-    next = request.url_root + COURSES + f'?limit={limit}&offset={offset + limit}'
-    return {"courses": courses, "next": next}, 200
+        response['courses'].append({
+            'id': course.key.id,
+            "instructor_id": course['instructor'],
+            "number": course["number"],
+            "self": request.url_root + COURSES + '/' + str(course.key.id),
+            "subject": course["subject"],
+            "term": course["term"],
+            "title": course["title"]
+        })
+    response['next'] = request.url_root + COURSES + f'?limit={limit}&offset={offset + limit}'
+    return response, 200
 
 
 @app.route('/' + COURSES + '/<int:course_id>', methods=['GET', 'PATCH', 'DELETE'])
