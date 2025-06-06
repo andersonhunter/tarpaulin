@@ -557,11 +557,12 @@ def update_course_enrollment(course_id: int):
         # Verify user authorization
         query = client.query(kind=USERS)
         query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
-        results = query.fetch()
+        results = list(query.fetch())
         if results is None:
             return ERR_403
-        elif results["role"] != 'admin' and results["role"] != 'instructor':
-            return ERR_403
+        for result in results:
+            if result["role"] != 'admin' and result["role"] != 'instructor':
+                return ERR_403
         # Check if instructor is authorized
         course = client.get(client.key(COURSES, course_id))
         if course is None:
@@ -579,28 +580,29 @@ def update_course_enrollment(course_id: int):
             db_student = client.get(client.key(USERS, student))
             if db_student is None or db_student['role'] != 'student':
                 return ERR_409
-            if course_id not in db_student['courses']['values']:
-                db_student['courses']['values'].append(course_id)
+            if course_id not in db_student['courses']:
+                db_student['courses'].append(course_id)
                 put_students.append(db_student)
                 # Add student to course
-                course['students']['values'].append(student)
+                course['students'].append(student)
         # Disenroll students, if any
         for student in content['remove']:
             # Remove course from student
             db_student = client.get(client.key(USERS, student))
             if db_student is None:
                 return ERR_409
-            if course_id in db_student['courses']['values']:
-                db_student['courses']['values'].remove(course_id)
+            if course_id in db_student['courses']:
+                db_student['courses'].remove(course_id)
                 put_students.append(db_student)
+            if student in course['students']:
                 # Remove student from course
-                course['students']['values'].remove(student)
+                course['students'].remove(student)
         # Commit changes
         client.put_multi(put_students)
         client.put(course)
         return '', 200
     elif request.method == 'GET':
-        return course['students']['values'], 200
+        return course['students'], 200
     else:
         return ERR_404
 
