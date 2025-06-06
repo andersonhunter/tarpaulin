@@ -173,6 +173,8 @@ def login():
     headers = {"content-type": "application/json"}
     url = "https://" + DOMAIN + "/oauth/token"
     r = requests.post(url, json=body, headers=headers)
+    if r.status_code == 403:
+        return ERR_401
     token = r.json()['id_token']
     return {"token": token}, 200
 
@@ -186,28 +188,29 @@ def get_users():
     If request is valid, returns an array of all users.
     If request is invalid, returns an appropriate error.
     """
-    try:
-        # Verify JWT
-        payload = verify_jwt(request)
-        if type(payload) is AuthError:
-            return ERR_401
-        # Check user authorization
-        query = client.query(kind=USERS)
-        query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
-        results = query.fetch()
-        if results["role"] != 'admin':
+    # Verify JWT
+    payload = verify_jwt(request)
+    if type(payload) is AuthError:
+        return ERR_401
+    # Check user authorization
+    query = client.query(kind=USERS)
+    query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+    results = list(query.fetch())
+    for result in results:
+        if result["role"] != 'admin':
             return ERR_403
-        # User has valid access, query users
-        query = client.query(kind=USERS)
-        query.projection = [
-            'id',
-            'sub',
-            'role'
-        ]
-        results = list(query.fetch())
-        return results, 200
-    except:
-        return {'Error': 'Unable to GET users'}, 500
+    # User has valid access, query users
+    query = client.query(kind=USERS)
+    results = list(query.fetch())
+    print(f'users = {results}')
+    users = []
+    for user in results:
+        users.append({
+            'id': user.key.id,
+            'sub': user['sub'],
+            'role': user['role']
+        })
+    return users, 200
     
 
 @app.route('/' + USERS + '/<int:user_id>', methods=['GET'])
