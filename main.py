@@ -389,13 +389,14 @@ def create_course():
     if instructor is None:
         return ERR_400
     # Create new course
-    new_course = datastore.Entity(key=client.key(USERS))
+    new_course = datastore.Entity(key=client.key(COURSES))
     new_course.update({
         "subject": content["subject"],
         "number": content["number"],
         "title": content["title"],
         "term": content["term"],
-        "instructor_id": int(content["instructor_id"])
+        "instructor": {"values": [int(content["instructor_id"])]},
+        "students": {"values": []}
     })
     client.put(new_course)
     # Add course to instructor
@@ -511,7 +512,7 @@ def get_course_by_id(course_id: int):
         if course is None:
             return ERR_403
         # Remove course from each enrolled student
-        for student in course['students']:
+        for student in course['students']['values']:
             student_record = client.get(client.key(USERS, student))
             student_record['courses']['values'].remove(course_id)
             client.put(student_record)
