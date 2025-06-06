@@ -202,7 +202,6 @@ def get_users():
     # User has valid access, query users
     query = client.query(kind=USERS)
     results = list(query.fetch())
-    print(f'users = {results}')
     users = []
     for user in results:
         users.append({
@@ -222,42 +221,32 @@ def get_user_by_id(user_id: int):
     Returns the user's data if request is authorized.
     Raises an appropriate error if not.
     """
-    try:
-        # Verify JWT
-        payload = verify_jwt(request)
-        if type(payload) is AuthError:
-            return ERR_401
-        # Verify user is authorized
-        query = client.query(kind=USERS)
-        query.add_filter(datastore.query.PropertyFilter("sub", "=", payload['sub']))
-        results = query.fetch()
-        if results['role'] != 'admin' or results['sub'] != payload['sub']:
+    # Verify JWT
+    payload = verify_jwt(request)
+    if type(payload) is AuthError:
+        return ERR_401
+    # Verify user is authorized
+    query = client.query(kind=USERS)
+    query.add_filter(filter=datastore.query.PropertyFilter("sub", "=", payload['sub']))
+    results = list(query.fetch())
+    for result in results:
+        if result['role'] != 'admin' and result.key.id != user_id:
             return ERR_403
-        # User is authorized, query for user
-        if results['sub'] == payload['sub']:
-            return results, 200
-        query = client.query(kind=USERS)
-        query.add_filter(datastore.query.PropertyFilter("id", "=", user_id))
-        results = query.fetch()
-        # Process accordingly
-        user = {
-            'courses': [],
-            'role': '',
-            'id': '',
-            'sub': ''
-        }
-        if results['role'] == 'instructor' or results['roles'] == 'student':
-            for course in results['courses']['values']:
-                user['courses'].append(f'{request.url_root}courses/{course}')
-        user['id'] = results['id']
-        user['role'] = results['role']
-        user['sub'] = results['sub']
-        if results['avatar'] is not None:
-            id = str(results['id'])
-            user['avatar'] = f'{request.url_root}users/{id}/avatar'
-        return results, 200
-    except:
-        return {'Error': f'Unable to fetch user {user_id}'}, 500
+    result = client.get(client.key(USERS, user_id))
+    # Process accordingly
+    user = {
+        'role': '',
+        'id': '',
+        'sub': ''
+    }
+    if result['role'] == 'instructor' or result['role'] == 'student':
+        user['courses'] = [course for course in result['courses']]
+    user['id'] = result.key.id
+    user['role'] = result['role']
+    user['sub'] = result['sub']
+    if 'avatar' in result:
+        user['avatar'] = f'{request.url_root}users/{str(result.key.id)}/avatar'
+    return user, 200
 
 
 @app.route('/' + USERS + '<int:user_id>' + '/' + AVATAR, methods=['POST', 'GET', 'DELETE'])
