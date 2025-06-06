@@ -233,14 +233,14 @@ def get_user_by_id(user_id: int):
         results = query.fetch()
         # Process accordingly
         user = {
-            'courses': [],
+            'courses': {"values": []},
             'role': '',
             'id': '',
             'sub': ''
         }
         if results['role'] == 'instructor' or results['roles'] == 'student':
             for course in results['courses']:
-                user['courses'].append(f'{request.url_root}courses/{course}')
+                user['courses']["values"].append(f'{request.url_root}courses/{course}')
         user['id'] = results['id']
         user['role'] = results['role']
         user['sub'] = results['sub']
