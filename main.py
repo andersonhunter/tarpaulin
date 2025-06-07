@@ -31,7 +31,7 @@ ERR_401 = {'Error': 'Unauthorized'}, 401
 ERR_403 = {'Error': 'You don\'t have permission on this resource'}, 403
 ERR_404 = {'Error': 'Not found'}, 404
 ERR_409 = {'Error': 'Enrollment data is invalid'}, 409
-PHOTO_BUCKET = 'tarpaulin_andershu_avatars'
+PHOTO_BUCKET = 'tarpaulin-avatars-andershu'
 
 # Set up OAuth client and registration
 oauth = OAuth(app)
