@@ -235,9 +235,9 @@ def get_user_by_id(user_id: int):
     result = client.get(client.key(USERS, user_id))
     # Process accordingly
     user = {
-        'role': user['role'],
-        'id': user.key.id,
-        'sub': user['sub']
+        'role': result['role'],
+        'id': result.key.id,
+        'sub': result['sub']
     }
     if result['role'] == 'instructor' or result['role'] == 'student':
         user['courses'] = [course for course in result['courses']]
@@ -312,7 +312,8 @@ def user_avatar(user_id: int):
         avatar.seek(0)
         if avatar is None:
             return ERR_404
-        return send_file(avatar, mimetype='image/x-png', download_name=str(user_id)), 200
+        # return send_file(avatar, mimetype='image/x-png', download_name=str(user_id)), 200
+        return send_file(blob, mimetype='image/x-png', download_name=blob.name), 200
     elif request.method == 'DELETE':
         # Validate JWT
         payload = verify_jwt(request)
@@ -563,11 +564,13 @@ def update_course_enrollment(course_id: int):
         for result in results:
             if result["role"] != 'admin' and result["role"] != 'instructor':
                 return ERR_403
-        # Check if instructor is authorized
+            if result['role'] == 'instructor' and result['sub'] != payload['sub']:
+                return ERR_403
         course = client.get(client.key(COURSES, course_id))
+        for result in results:
+            if course['instructor'] != result.key.id:
+                return ERR_403
         if course is None:
-            return ERR_403
-        if results['role'] == 'instructor' and results['sub'] != payload['sub']:
             return ERR_403
     if request.method == 'PATCH':
         # Enroll students, if any
